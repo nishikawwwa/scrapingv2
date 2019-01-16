@@ -11,6 +11,8 @@ from pyvirtualdisplay import Display
 import sys
 import pandas as pd
 import MeCab
+from collections import Counter
+
 
 save_path = '/home/a_nishikawa/scrapingv2/data/'
 
@@ -27,12 +29,24 @@ def scraping(url):
     text = np.array(text)
     text = [e for e in text if not e.startswith('\n')]
 
-    return text
+    soup = BeautifulSoup(HTML.text, 'lxml')
+    #リンク
+    links = [a.get("href") for a in soup.find_all("a")]
+
+    #画像
+    images = []
+    for link in soup.find_all("img"):
+        if link.get("src").endswith(".jpg"): # imgタグ内の.jpgであるsrcタグを取得
+            images.append(link.get("src")) # imagesリストに格納
+        elif link.get("src").endswith(".png"): # imgタグ内の.pngであるsrcタグを取得
+        	images.append(link.get("src"))
+
+    return text,links,images
 
 
 
 def mecab(keyword):
-    sentence = scraping('http://blog.livedoor.jp/kinisoku/archives/5013621.html')
+    sentence,link,images = scraping('http://blog.livedoor.jp/kinisoku/archives/5013621.html')
     #print(sentence)
 
     noun = []
@@ -59,10 +73,41 @@ def mecab(keyword):
     #キーワードマッチ数
     keyword_match = len(sentence[sentence== keyword])
 
-    return noun,word,keyword_match
+    return noun,word,keyword_match,link,images
 
-noun, word, keyword_match = mecab('私')
+noun, word, keyword_match,link,images = mecab('私')
 
 print('keywords',len(noun))
 print('key',len(word))
 print('keyword_match',keyword_match)
+print('images',images)
+#リンク先の分類
+def extract_major(link,top_count):
+    link_list = []
+    for count, ll in enumerate(link):
+        if ll != None:
+            split_num = len(ll.split('/'))
+            link_major = ll.rsplit('/',split_num - 3)
+            link_list.append(link_major[0])
+
+    mm = Counter(link_list)
+
+    link_top = []
+    for i in range(top_count):
+        link_top.append(mm.most_common()[i][0])
+
+    return link_top
+
+link_top = extract_major(link,10)
+image_top = extract_major(images,2)
+print(link_top)
+print(image_top)
+'''
+for links in link:
+    print('links',links)
+    split_num = links.split('/')
+    link_major = links.rsplit('/',len(split_num) - 3)
+    link_list.append(link_major[0])
+
+print(link_list)
+'''
