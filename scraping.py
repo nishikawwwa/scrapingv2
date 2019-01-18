@@ -12,6 +12,7 @@ import sys
 import pandas as pd
 import MeCab
 from collections import Counter
+import pandas as pd
 
 
 save_path = '/home/a_nishikawa/scrapingv2/data/'
@@ -46,7 +47,7 @@ def scraping(url):
 
 
 def mecab(keyword):
-    sentence,link,images = scraping('http://blog.livedoor.jp/kinisoku/archives/5013621.html')
+    sentence,link,images = scraping(site_name)
     #print(sentence)
 
     noun = []
@@ -75,6 +76,8 @@ def mecab(keyword):
 
     return noun,word,keyword_match,link,images
 
+
+site_name = 'http://blog.livedoor.jp/kinisoku/archives/5013621.html'
 noun, word, keyword_match,link,images = mecab('私')
 
 print('keywords',len(noun))
@@ -90,6 +93,9 @@ def extract_major(link,top_count):
             link_major = ll.rsplit('/',split_num - 3)
             link_list.append(link_major[0])
 
+    if len(set(link_list)) < 10:
+        top_count = len(set(link_list))
+
     mm = Counter(link_list)
 
     link_top = []
@@ -99,9 +105,16 @@ def extract_major(link,top_count):
     return link_top
 
 link_top = extract_major(link,10)
-image_top = extract_major(images,2)
+
+image_top = extract_major(images,10)
 print(link_top)
 print(image_top)
+
+
+data_list = [[site_name, word, noun, keyword_match, link_top, image_top],[0,0,0,0,0,0]]
+
+df = pd.DataFrame(data_list, columns = ['url', 'word','noun','keyword_match','link_top','img_top'])
+df.to_csv('db.csv')
 '''
 for links in link:
     print('links',links)
