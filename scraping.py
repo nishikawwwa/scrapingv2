@@ -74,14 +74,14 @@ def mecab(keyword):
     #キーワードマッチ数
     keyword_match = len(sentence[sentence== keyword])
 
-    return noun,word,keyword_match,link,images
+    return len(noun),len(word),keyword_match,link,images
 
 
 site_name = 'http://blog.livedoor.jp/kinisoku/archives/5013621.html'
 noun, word, keyword_match,link,images = mecab('私')
 
-print('keywords',len(noun))
-print('key',len(word))
+print('keywords',noun)
+print('key',word)
 print('keyword_match',keyword_match)
 print('images',images)
 #リンク先の分類
