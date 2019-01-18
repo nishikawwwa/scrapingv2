@@ -114,6 +114,8 @@ print(image_top)
 data_list = [[site_name, word, noun, keyword_match, link_top, image_top],[0,0,0,0,0,0]]
 
 df = pd.DataFrame(data_list, columns = ['url', 'word','noun','keyword_match','link_top','img_top'])
+
+df = df.drop(1)
 df.to_csv('db.csv')
 '''
 for links in link:
