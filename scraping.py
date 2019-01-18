@@ -52,6 +52,9 @@ def mecab(keyword):
 
     noun = []
     word = []
+    adjective = []
+    adjective_verb = []
+    verb = []
 
     t = MeCab.Tagger()
     for each_sentence in sentence:
@@ -59,6 +62,9 @@ def mecab(keyword):
         t.parse('')
         m = t.parseToNode(each_sentence)
         m2 = t.parseToNode(each_sentence)
+        m3 = t.parseToNode(each_sentence)
+        m4 = t.parseToNode(each_sentence)
+        m5 = t.parseToNode(each_sentence)
         print(m)
         while m:
             if m.feature.split(',')[0] == '名詞':
@@ -70,15 +76,34 @@ def mecab(keyword):
             word.append(m2.surface)
             m2 = m2.next
 
+        while m3:
+            if m3.feature.split(',')[0] == '形容詞':
+                adjective.append(m3.surface)
+            m3 = m3.next
+
+        while m4:
+            if m4.feature.split(',')[0] == '形容動詞語幹':
+                adjective_verb.append(m4.surface)
+            m4 = m4.next
+
+        while m5:
+            if m5.feature.split(',')[0] == '動詞':
+                verb.append(m5.surface)
+            m5 = m5.next
+
+
 
     #キーワードマッチ数
     keyword_match = len(sentence[sentence== keyword])
 
-    return len(noun),len(word),keyword_match,link,images
+    return len(noun),len(word),keyword_match,link,images, len(adjective), len(adjective_verb), len(verb)
 
 
 site_name = 'http://blog.livedoor.jp/kinisoku/archives/5013621.html'
-noun, word, keyword_match,link,images = mecab('私')
+noun, word, keyword_match,link,images,adjective, adjective_verb, verb = mecab('私')
+
+split_sitename = len(site_name.split('/'))
+site_major = site_name.rsplit('/',split_sitename - 3)
 
 print('keywords',noun)
 print('key',word)
@@ -87,12 +112,22 @@ print('images',images)
 #リンク先の分類
 def extract_major(link,top_count):
     link_list = []
+    in_link = 0
     for count, ll in enumerate(link):
         if ll != None:
             split_num = len(ll.split('/'))
             link_major = ll.rsplit('/',split_num - 3)
-            link_list.append(link_major[0])
+            if link_major != site_major:
+                #外部リンクだけ
+                link_list.append(link_major[0])
+            else:
+                #内部リンク数カウント
+                in_link += 1
 
+        #外部リンク数
+        out_link = len(link_list)
+
+    #uniqueなリンク数が10以下の場合
     if len(set(link_list)) < 10:
         top_count = len(set(link_list))
 
@@ -102,18 +137,18 @@ def extract_major(link,top_count):
     for i in range(top_count):
         link_top.append(mm.most_common()[i][0])
 
-    return link_top
+    return link_top, in_link, out_link
 
-link_top = extract_major(link,10)
+link_top,link_in_link,link_out_link = extract_major(link,10)
 
-image_top = extract_major(images,10)
+image_top,image_in_link,image_out_link = extract_major(images,10)
 print(link_top)
 print(image_top)
 
 
-data_list = [[site_name, word, noun, keyword_match, link_top, image_top],[0,0,0,0,0,0]]
+data_list = [[site_name, word, noun,adjective,adjective_verb,verb, keyword_match,, link_top, image_top],[0,0,0,0,0,0]]
 
-df = pd.DataFrame(data_list, columns = ['url', 'word','noun','keyword_match','link_top','img_top'])
+df = pd.DataFrame(data_list, columns = ['url', 'word','noun','adjective','adjective_verb','verb','keyword_match','link_top','img_top'])
 
 df = df.drop(1)
 df.to_csv('db.csv')
