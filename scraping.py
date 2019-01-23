@@ -14,15 +14,22 @@ import MeCab
 from collections import Counter
 import pandas as pd
 
+def url():
+    args = sys.argv
+    url = args[1]
+    return url
+
+site_name = url()
 
 save_path = '/home/a_nishikawa/scrapingv2/data/'
 
-USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1'
+#USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1'
 
 def scraping(url):
     # requestsの場合
-    headers={'User-Agent':USER_AGENT}
-    HTML = requests.get(url, headers=headers)
+    #headers={'User-Agent':USER_AGENT}
+    #HTML = requests.get(url, headers=headers)
+    HTML = requests.get(url)
     #mecab用処理
     url_soup = lxml.html.fromstring(HTML.content)
     lim = url_soup.body
@@ -33,6 +40,9 @@ def scraping(url):
     soup = BeautifulSoup(HTML.text, 'lxml')
     #リンク
     links = [a.get("href") for a in soup.find_all("a")]
+    text_data = BeautifulSoup(HTML.content, 'html.parser')
+    with open('body.html', mode='w', encoding = 'utf-8') as f:
+        f.write(text_data.prettify())
 
     #画像
     images = []
@@ -65,7 +75,7 @@ def mecab(keyword):
         m3 = t.parseToNode(each_sentence)
         m4 = t.parseToNode(each_sentence)
         m5 = t.parseToNode(each_sentence)
-        print(m)
+        #print(m)
         while m:
             if m.feature.split(',')[0] == '名詞':
                 noun.append(m.surface)
@@ -99,7 +109,7 @@ def mecab(keyword):
     return len(noun),len(word),keyword_match,link,images, len(adjective), len(adjective_verb), len(verb)
 
 
-site_name = 'http://blog.livedoor.jp/kinisoku/archives/5013621.html'
+#site_name = 'http://blog.livedoor.jp/kinisoku/archives/5013621.html'
 noun, word, keyword_match,link,images,adjective, adjective_verb, verb = mecab('私')
 
 split_sitename = len(site_name.split('/'))
@@ -108,47 +118,62 @@ site_major = site_name.rsplit('/',split_sitename - 3)
 print('keywords',noun)
 print('key',word)
 print('keyword_match',keyword_match)
-print('images',images)
+#print('images',images)
+#print('link',link)
 #リンク先の分類
 def extract_major(link,top_count):
     link_list = []
     in_link = 0
+    page_link_num = 0
     for count, ll in enumerate(link):
         if ll != None:
             split_num = len(ll.split('/'))
             link_major = ll.rsplit('/',split_num - 3)
-            if link_major != site_major:
-                #外部リンクだけ
-                link_list.append(link_major[0])
-            else:
-                #内部リンク数カウント
-                in_link += 1
+            link_major_1 = link_major[0]
+            #print('site_major', site_major[0])
+            if link_major_1 != None:
+                #print('1',link_major_1,'1')
+                try:
+                    print('link1', str(link_major_1[0]))
+                    if link_major_1[0] == '#':
+                        page_link_num += 1
+                    elif link_major[0] != site_major[0]:
+                        #外部リンクだけ
+                        link_list.append(link_major[0])
+
+                    else:
+                        #内部リンク数カウント
+                        in_link += 1
+                except:
+                    pass
 
         #外部リンク数
         out_link = len(link_list)
+    print('link_list', link_list)
+    print('pagelink', page_link_num)
 
     #uniqueなリンク数が10以下の場合
     if len(set(link_list)) < 10:
         top_count = len(set(link_list))
 
     mm = Counter(link_list)
-
+    #外部リンクないのtop
     link_top = []
     for i in range(top_count):
         link_top.append(mm.most_common()[i][0])
 
-    return link_top, in_link, out_link
+    return link_top, in_link, out_link,page_link_num
 
-link_top,link_in_link,link_out_link = extract_major(link,10)
+link_top,link_in_link,link_out_link,page_link_num = extract_major(link,10)
 
-image_top,image_in_link,image_out_link = extract_major(images,10)
-print(link_top)
-print(image_top)
+image_top,image_in_link,image_out_link,img_link_num = extract_major(images,10)
+print(link_in_link)
+print(link_out_link)
 
 
-data_list = [[site_name, word, noun,adjective,adjective_verb,verb, keyword_match,, link_top, image_top],[0,0,0,0,0,0]]
+data_list = [[site_name, word, noun,adjective,adjective_verb,verb, keyword_match,link_in_link,link_out_link,page_link_num, link_top, image_top],[0,0,0,0,0,0,0,0,0]]
 
-df = pd.DataFrame(data_list, columns = ['url', 'word','noun','adjective','adjective_verb','verb','keyword_match','link_top','img_top'])
+df = pd.DataFrame(data_list, columns = ['url', 'word','noun','adjective','adjective_verb','verb','keyword_match','in_link','out_link','pagein_link','link_top','img_top'])
 
 df = df.drop(1)
 df.to_csv('db.csv')
