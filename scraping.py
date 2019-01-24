@@ -138,8 +138,9 @@ def extract_major(link,top_count):
                     if link_major_1[0] == '#':
                         page_link_num += 1
                     elif link_major[0] != site_major[0]:
-                        #外部リンクだけ
-                        link_list.append(link_major[0])
+                        if link_major_1[0] == 'h':
+                            #外部リンクだけ
+                            link_list.append(link_major[0])
 
                     else:
                         #内部リンク数カウント
