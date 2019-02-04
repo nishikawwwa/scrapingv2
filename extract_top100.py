@@ -13,6 +13,7 @@ import pandas as pd
 import MeCab
 from collections import Counter
 import pandas as pd
+import re
 
 #USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1'
 save_path = '/home/a_nishikawa/scrapingv2/data/top100/'
@@ -41,13 +42,27 @@ def scraping(domain):
 
     return text
 
-def mecab(sentence):
+def format_text(texts):
+    '''
+    MeCabに入れる前のツイートの整形方法例
+    '''
 
+    texts=re.sub(r'https?://[\w/:%#\$&\?\(\)~\.=\+\-…]+', "", texts)
+    texts=re.sub(r'[!-/:-@[-`{-~]', "", texts)#半角記号,数字,英字
+    texts=re.sub(r'[︰-＠]', "", texts)#全角記号
+    texts=re.sub('\n', " ", texts)#改行文字
+    texts=re.sub(r'[「」.,:【】〈〉]', "", texts)#改行文字
+
+    return texts
+
+
+
+def mecab(sentence):
     word = []
 
     t = MeCab.Tagger()
     for each_sentence in sentence:
-
+        each_sentence = format_text(each_sentence)
         t.parse('')
         m = t.parseToNode(each_sentence)
         #print(m)
@@ -57,6 +72,8 @@ def mecab(sentence):
             word.append(m.surface)
             m = m.next
     return word
+
+
 
 df = pd.read_excel('20190110.xlsx', skiprows=0, header=0, index_col=2)
 #print(df)
@@ -69,7 +86,7 @@ domain_list = []
 for i in data:
     domain_list.append(i[1])
 
-domain_list = domain_list[0:3]
+#domain_list = domain_list[0:3]
 
 word_list = []
 un_word_list = np.array([])
@@ -79,8 +96,10 @@ for j in domain_list:
     try:
         text = scraping(j)
         word = mecab(text)
-        #print('word',word)
+        print('word',word)
+        print('word')
         unique_word = np.array(word)
+        #格サイト内の重複除去
         unique_word = np.unique(unique_word)
         un_word_list = np.append(un_word_list, unique_word)
         word_list.append(word)
@@ -88,18 +107,22 @@ for j in domain_list:
     except:
         pass
 
+print('unique',unique_word)
 #print(len(word_list))
 print(len(un_word_list))
-#uniqueなlist
+#全てのサイト内で重複除去
 unique_word_list = np.unique(un_word_list)
 print(len(unique_word_list))
 remove_list = np.array([])
-for i in unique_word:
-    if np.sum(un_word_list == i) == 3:
+for i in unique_word_list:
+    #全てのサイトに含まれているのか
+
+    if np.sum(un_word_list == i) == 100:
         remove_list = np.append(remove_list, i)
 
+print('re',remove_list)
 
-top_list = []
+top_list = [[]]
 #サイトごと
 for i, data in enumerate(word_list):
     remove_uni_list = np.array([])
@@ -120,7 +143,7 @@ for i, data in enumerate(word_list):
             link_top.append(mm.most_common()[i][0])
 
         '''
-    print('dd', data)
+    #print('dd', data)
     mm = Counter(data)
     top_count = 100
     if len(set(data)) < 100:
@@ -128,14 +151,24 @@ for i, data in enumerate(word_list):
         top_count = len(set(data))
 
     link_top = []
-    for i in range(top_count):
-        link_top.append(mm.most_common()[i][0])
-    np.savetxt(save_path + i + 'body.txt', link_top,fmt='%s', delimiter=',')
-    top_list.append(link_top)
+    for cou in range(top_count):
+        link_top.append(mm.most_common()[cou][0])
 
-print('uni', remove_uni_list)
+    top_list.append(link_top)
+    link_top = np.array(link_top)
+    np.savetxt(save_path + str(i) + 'body.txt', link_top,fmt='%s', delimiter=',')
+
+print('uni', top_list)
 print('top', len(top_list[0]))
 print('top', len(top_list[1]))
+
+column_name = []
+for i in range(1,101):
+    column_name.append('top' + str(i))
+
+df =pd.DataFrame(data = top_list, columns = column_name)
+
+df.to_csv('top100.csv')
 
 '''
 text, links,images = scraping('otonanswer.jp')
