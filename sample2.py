@@ -1,18 +1,15 @@
 # -*- coding: utf-8 -*-
-from selenium import webdriver
+import argparse
 from pprint import pprint
 import requests
 from bs4 import BeautifulSoup
 import numpy as np
 import os
-from time import sleep
 import lxml.html
-from pyvirtualdisplay import Display
 import sys
 import pandas as pd
 import MeCab
 from collections import Counter
-import pandas as pd
 import re
 
 __VERSION__ = '0.0.1'
@@ -22,19 +19,6 @@ HOME = '/home/a_nishikawa'
 LOGDIR = os.path.join(HOME, 'log')
 
 save_path = '/home/a_nishikawa/scrapingv2/data/'
-
-
-def url():
-    """
-    引数
-    """
-    args = sys.argv
-    url = args[1]
-    return url
-
-site_name = url()
-split_sitename = len(site_name.split('/'))
-site_major = site_name.rsplit('/',split_sitename - 3)
 
 
 def extract_pos(t,each_sentence,list,pos):
@@ -105,61 +89,36 @@ def mecab(keyword,sentence):
     #キーワードマッチ数
     keyword_match = len(sentence[sentence== keyword])
     return len(noun),len(word),keyword_match,len(adjective), len(adjective_verb), len(verb)
-'''
 
-def link_destination(link,split_sitename,site_major):
-    link_list = []
-    in_link = 0
-    page_link_num = 0
-    for count, ll in enumerate(link):
-        if ll != None:
-            split_num = len(ll.split('/'))
-            link_major = ll.rsplit('/',split_num - 3)
-            link_major_1 = link_major[0]
-            #print('site_major', site_major[0])
-            if link_major_1 != None:
-                #print('1',link_major_1,'1')
-                try:
-                    #print('link1', str(link_major_1[0]))
-                    if link_major_1[0] == '#':
-                        page_link_num += 1
-                    elif link_major[0] != site_major[0]:
-                        if link_major_1[0] == 'h':
-                            link_list.append(link_major[0])
-                    else:
-                        #内部リンク数カウント
-                        in_link += 1
-                except:
-                    pass
 
-        #外部リンク数
-        out_link = len(link_list)
-        return link_list, page_link_num, out_link
+def url_major(site_name):
+    """
+    サイトのトップページurl抽出
+    """
+    split_sitename = len(site_name.split('/'))
+    site_major = site_name.rsplit('/',split_sitename - 3)
+    return site_major[0]
 
-'''
-def extract_major(link,top_count):
+def extract_major(site_name,link,top_count):
     """
     リンク先分類
     """
+    site_major = url_major(site_name)
     link_list = []
     in_link = 0
     page_link_num = 0
     for count, ll in enumerate(link):
         if ll != None:
-            split_num = len(ll.split('/'))
-            link_major = ll.rsplit('/',split_num - 3)
-            link_major_1 = link_major[0]
-            #print('site_major', site_major[0])
+            link_major_1 = url_major(ll)
             if link_major_1 != None:
-                #print('1',link_major_1,'1')
                 try:
-                    #print('link1', str(link_major_1[0]))
                     if link_major_1[0] == '#':
+                        #ページ内リンク
                         page_link_num += 1
-                    elif link_major[0] != site_major[0]:
+                    elif link_major_1 != site_major:
                         if link_major_1[0] == 'h':
                             #外部リンクだけ
-                            link_list.append(link_major[0])
+                            link_list.append(link_major_1)
                     else:
                         #内部リンク数カウント
                         in_link += 1
@@ -168,7 +127,6 @@ def extract_major(link,top_count):
 
         #外部リンク数
         out_link = len(link_list)
-
     #uniqueなリンク数が10以下の場合
     if len(set(link_list)) < 10:
         top_count = len(set(link_list))
@@ -181,15 +139,37 @@ def extract_major(link,top_count):
 
     return link_top, in_link, out_link,page_link_num
 
+def print_version():
+    """
+    Scriptのバージョンを表示する
+    """
+    print("Version: {}".format(__VERSION__))
 
 def main():
+    parser = argparse.ArgumentParser(description='サイトの特徴量抽出')
+    parser.add_argument('--url', help = 'URL of scraping site')
+    parser.add_argument('--keyword', help = 'Count keyword')
+    parser.add_argument('--dir', help = 'Save dir_path')
+    args = parser.parse_args()
+    site_name = args.url
+    keyword = args.keyword
+    if args.dir != None:
+        dir_path = args.dir
+    else:
+        dir_path = os.getcwd() + '/'
+    print_version()
+
     text,links,images = scraping(site_name)
-    noun, word, keyword_match,adjective, adjective_verb, verb = mecab('名無し',text)
-    print(noun)
+    noun, word, keyword_match,adjective, adjective_verb, verb = mecab(keyword,text)
 
-    link_top,link_in_link,link_out_link,page_link_num = extract_major(links,10)
-    print(link_in_link)
+    link_top,link_in_link,link_out_link,page_link_num = extract_major(site_name,links,10)
+    image_top,image_in_link,image_out_link,img_link_num = extract_major(site_name,images,10)
 
+    data_list = [[site_name, word, noun,adjective,adjective_verb,verb, keyword_match,link_in_link,link_out_link,page_link_num, link_top, image_top],[0,0,0,0,0,0,0,0,0]]
+    df = pd.DataFrame(data_list, columns = ['url', 'word','noun','adjective','adjective_verb','verb','keyword_match','in_link','out_link','pagein_link','link_top','img_top'])
+    df = df.drop(1)
+    df.to_csv(dir_path + 'db.csv')
+    print('Directory of File >>>', dir_path+ 'db.csv')
 
 if __name__ == '__main__':
     main()
