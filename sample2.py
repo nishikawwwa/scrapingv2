@@ -11,6 +11,8 @@ import pandas as pd
 import MeCab
 from collections import Counter
 import re
+import urllib
+import datetime
 
 __VERSION__ = '0.0.1'
 __AUTHOR__ = 'Akari Nishikawa (a_nishikawa@fancs.com)'
@@ -18,31 +20,24 @@ __AUTHOR__ = 'Akari Nishikawa (a_nishikawa@fancs.com)'
 HOME = '/home/a_nishikawa'
 LOGDIR = os.path.join(HOME, 'log')
 
-save_path = '/home/a_nishikawa/scrapingv2/data/'
+save_path = HOME + '/scrapingv2/data/'
+USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1'
 
-
-def extract_pos(t,each_sentence,list,pos):
-    """
-    品詞抽出
-    """
-    m = t.parseToNode(each_sentence)
-    while m:
-        if m.feature.split(',')[0] == pos:
-            list.append(m.surface)
-        m = m.next
-    return list
 
 def scraping(url):
     """
     スクレイピング
     """
-    HTML = requests.get(url)
+    headers={'User-Agent':USER_AGENT}
+    HTML = requests.get(url, headers=headers)
     #mecab用処理
-    url_soup = lxml.html.fromstring(HTML.content)
-    lim = url_soup.body
-    text = lim.xpath('//text()[name(..)!="script"][name(..)!="style"]')
-    text = np.array(text)
-    text = [e for e in text if not e.startswith('\n')]
+    text_soup = lxml.html.fromstring(HTML.content)
+    soup_body = text_soup.body
+    text = soup_body.xpath('//text()[name(..)!="script"][name(..)!="style"]')
+    #\nがsoup_bodyに含まれているため，除去
+    text = ''.join(text)
+    text = text.replace('\n', '')
+    #text = [e for e in text if not e.startswith('\n')]
 
     soup = BeautifulSoup(HTML.text, 'lxml')
     #リンク
@@ -57,59 +52,73 @@ def scraping(url):
             images.append(link.get("src"))
         elif link.get("src").endswith(".png"):
         	images.append(link.get("src"))
+        elif link.get("src").endswith(".gif"):
+        	images.append(link.get("src"))
+        elif link.get("src").endswith(".svg"):
+        	images.append(link.get("src"))
+        elif link.get("src").endswith(".tif"):
+        	images.append(link.get("src"))
 
     return text,links,images
 
 
-def mecab(keyword,sentence):
+def using_mecab(keyword,sentence):
     '''
     mecabで品詞抽出
     '''
-    noun = []
-    word = []
-    adjective = []
-    adjective_verb = []
-    verb = []
+    noun = 0
+    word = 0
+    adjective = 0
+    adjective_verb = 0
+    verb = 0
+    keyword_cnt = []
+    for i in range(len(keyword)):
+        keyword_cnt.append(0)
 
     t = MeCab.Tagger()
+    #each_sentenceには単語ではなく，文が格納
     for each_sentence in sentence:
         t.parse('')
-
-        noun = extract_pos(t,each_sentence,noun,'名詞')
-        adjective = extract_pos(t,each_sentence,adjective,'形容詞')
-        adjective_verb = extract_pos(t,each_sentence,adjective_verb,'形容動詞語幹')
-        verb = extract_pos(t,each_sentence,verb,'動詞')
-
-        #単語数
-        m2 = t.parseToNode(each_sentence)
-        while m2:
-            word.append(m2.surface)
-            m2 = m2.next
+        node = t.parseToNode(each_sentence)
+        while node:
+            if node.feature.split(',')[0] == '名詞':
+                noun += 1
+            elif node.feature.split(',')[0] == '形容詞':
+                adjective += 1
+            elif node.feature.split(',')[0] == '形容動詞語幹':
+                adjective_verb +=1
+            elif node.feature.split(',')[0] == '動詞':
+                verb += 1
+            word += 1
+            #count keyword
+            for j,each_keyword in enumerate(keyword):
+                if node.surface == each_keyword:
+                    keyword_cnt[j] += 1
+            node = node.next
 
     #キーワードマッチ数
-    keyword_match = len(sentence[sentence== keyword])
-    return len(noun),len(word),keyword_match,len(adjective), len(adjective_verb), len(verb)
+    return noun,word,adjective, adjective_verb, verb,keyword_cnt
 
 
-def url_major(site_name):
+def get_top_url(url):
     """
     サイトのトップページurl抽出
     """
-    split_sitename = len(site_name.split('/'))
-    site_major = site_name.rsplit('/',split_sitename - 3)
-    return site_major[0]
+    parse_url = urllib.parse.urlparse(url)
+    top_url = parse_url.scheme + '://' + parse_url.netloc
+    return top_url
 
 def extract_major(site_name,link,top_count):
     """
     リンク先分類
     """
-    site_major = url_major(site_name)
+    site_major = get_top_url(site_name)
     link_list = []
     in_link = 0
     page_link_num = 0
     for count, ll in enumerate(link):
         if ll != None:
-            link_major_1 = url_major(ll)
+            link_major_1 = get_top_url(ll)
             if link_major_1 != None:
                 try:
                     if link_major_1[0] == '#':
@@ -124,7 +133,6 @@ def extract_major(site_name,link,top_count):
                         in_link += 1
                 except:
                     pass
-
         #外部リンク数
         out_link = len(link_list)
     #uniqueなリンク数が10以下の場合
@@ -132,7 +140,7 @@ def extract_major(site_name,link,top_count):
         top_count = len(set(link_list))
 
     mm = Counter(link_list)
-    #外部リンクないのtop
+    #外部リンク内のtop
     link_top = []
     for i in range(top_count):
         link_top.append(mm.most_common()[i][0])
@@ -148,7 +156,7 @@ def print_version():
 def main():
     parser = argparse.ArgumentParser(description='サイトの特徴量抽出')
     parser.add_argument('--url', help = 'URL of scraping site')
-    parser.add_argument('--keyword', help = 'Count keyword')
+    parser.add_argument('--keyword', nargs='*',help = 'Count keyword')
     parser.add_argument('--dir', help = 'Save dir_path')
     args = parser.parse_args()
     site_name = args.url
@@ -160,16 +168,17 @@ def main():
     print_version()
 
     text,links,images = scraping(site_name)
-    noun, word, keyword_match,adjective, adjective_verb, verb = mecab(keyword,text)
+    noun, word,adjective, adjective_verb, verb,keyword_cnt = using_mecab(keyword,text)
 
-    link_top,link_in_link,link_out_link,page_link_num = extract_major(site_name,links,10)
-    image_top,image_in_link,image_out_link,img_link_num = extract_major(site_name,images,10)
+    link_top,in_link_cnt,out_link_cnt,page_link_cnt = extract_major(site_name,links,10)
+    image_top,image_in_link_cnt,image_out_link_cnt,img_link_cnt = extract_major(site_name,images,10)
 
-    data_list = [[site_name, word, noun,adjective,adjective_verb,verb, keyword_match,link_in_link,link_out_link,page_link_num, link_top, image_top],[0,0,0,0,0,0,0,0,0]]
+    data_list = [[site_name, word, noun,adjective,adjective_verb,verb, keyword_cnt,in_link_cnt,out_link_cnt,page_link_cnt, link_top, image_top],[0,0,0,0,0,0,0,0,0]]
     df = pd.DataFrame(data_list, columns = ['url', 'word','noun','adjective','adjective_verb','verb','keyword_match','in_link','out_link','pagein_link','link_top','img_top'])
     df = df.drop(1)
-    df.to_csv(dir_path + 'db.csv')
-    print('Directory of File >>>', dir_path+ 'db.csv')
-
+    now = datetime.datetime.now()
+    print(keyword_cnt)
+    #df.to_csv(dir_path + '{0:%Y%m%d%H%M}'.format(now)+'.csv')
+    print('Directory of File >>>', dir_path+ '{0:%Y%m%d%H%M}'.format(now)+'.csv')
 if __name__ == '__main__':
     main()
