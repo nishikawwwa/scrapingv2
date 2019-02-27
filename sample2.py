@@ -24,20 +24,21 @@ save_path = HOME + '/scrapingv2/data/'
 USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1'
 
 
-def scraping(url):
+def scrape(url):
     """
     スクレイピング
     """
     headers={'User-Agent':USER_AGENT}
-    HTML = requests.get(url, headers=headers)
+    res = requests.get(url, headers=headers)
+    res.status_code == requests.codes.ok
+    HTML = res
     #mecab用処理
     text_soup = lxml.html.fromstring(HTML.content)
     soup_body = text_soup.body
     text = soup_body.xpath('//text()[name(..)!="script"][name(..)!="style"]')
     #\nがsoup_bodyに含まれているため，除去
-    text = ''.join(text)
-    text = text.replace('\n', '')
-    #text = [e for e in text if not e.startswith('\n')]
+    for count, each_text in enumerate(text):
+        text[count] = each_text.replace('\n','')
 
     soup = BeautifulSoup(HTML.text, 'lxml')
     #リンク
@@ -48,21 +49,12 @@ def scraping(url):
     #画像
     images = []
     for link in soup.find_all("img"):
-        if link.get("src").endswith(".jpg"):
-            images.append(link.get("src"))
-        elif link.get("src").endswith(".png"):
-        	images.append(link.get("src"))
-        elif link.get("src").endswith(".gif"):
-        	images.append(link.get("src"))
-        elif link.get("src").endswith(".svg"):
-        	images.append(link.get("src"))
-        elif link.get("src").endswith(".tif"):
-        	images.append(link.get("src"))
+        images.append(link.get("src"))
 
     return text,links,images
 
 
-def using_mecab(keyword,sentence):
+def extract_keyword(keyword,sentence):
     '''
     mecabで品詞抽出
     '''
@@ -108,6 +100,7 @@ def get_top_url(url):
     top_url = parse_url.scheme + '://' + parse_url.netloc
     return top_url
 
+
 def extract_major(site_name,link,top_count):
     """
     リンク先分類
@@ -136,7 +129,7 @@ def extract_major(site_name,link,top_count):
         #外部リンク数
         out_link = len(link_list)
     #uniqueなリンク数が10以下の場合
-    if len(set(link_list)) < 10:
+    if len(set(link_list)) < top_count:
         top_count = len(set(link_list))
 
     mm = Counter(link_list)
@@ -147,11 +140,13 @@ def extract_major(site_name,link,top_count):
 
     return link_top, in_link, out_link,page_link_num
 
+
 def print_version():
     """
     Scriptのバージョンを表示する
     """
     print("Version: {}".format(__VERSION__))
+
 
 def main():
     parser = argparse.ArgumentParser(description='サイトの特徴量抽出')
@@ -159,7 +154,7 @@ def main():
     parser.add_argument('--keyword', nargs='*',help = 'Count keyword')
     parser.add_argument('--dir', help = 'Save dir_path')
     args = parser.parse_args()
-    site_name = args.url
+    site_url = args.url
     keyword = args.keyword
     if args.dir != None:
         dir_path = args.dir
@@ -167,18 +162,21 @@ def main():
         dir_path = os.getcwd() + '/'
     print_version()
 
-    text,links,images = scraping(site_name)
-    noun, word,adjective, adjective_verb, verb,keyword_cnt = using_mecab(keyword,text)
+    text,links,images = scrape(site_url)
+    noun, word,adjective, adjective_verb, verb,keyword_cnt = extract_keyword(keyword,text)
 
-    link_top,in_link_cnt,out_link_cnt,page_link_cnt = extract_major(site_name,links,10)
-    image_top,image_in_link_cnt,image_out_link_cnt,img_link_cnt = extract_major(site_name,images,10)
+    #出現頻度抽出サイト数
+    n_top = 10
+    link_top,in_link_cnt,out_link_cnt,page_link_cnt = extract_major(site_url,links,n_top)
+    image_top,image_in_link_cnt,image_out_link_cnt,img_link_cnt = extract_major(site_url,images,n_top)
 
-    data_list = [[site_name, word, noun,adjective,adjective_verb,verb, keyword_cnt,in_link_cnt,out_link_cnt,page_link_cnt, link_top, image_top],[0,0,0,0,0,0,0,0,0]]
+    data_list = [[site_url, word, noun,adjective,adjective_verb,verb, keyword_cnt,in_link_cnt,out_link_cnt,page_link_cnt, link_top, image_top],[0,0,0,0,0,0,0,0,0]]
     df = pd.DataFrame(data_list, columns = ['url', 'word','noun','adjective','adjective_verb','verb','keyword_match','in_link','out_link','pagein_link','link_top','img_top'])
     df = df.drop(1)
     now = datetime.datetime.now()
-    print(keyword_cnt)
-    #df.to_csv(dir_path + '{0:%Y%m%d%H%M}'.format(now)+'.csv')
+    df.to_csv(dir_path + '{0:%Y%m%d%H%M}'.format(now)+'.csv')
     print('Directory of File >>>', dir_path+ '{0:%Y%m%d%H%M}'.format(now)+'.csv')
+
+
 if __name__ == '__main__':
     main()
