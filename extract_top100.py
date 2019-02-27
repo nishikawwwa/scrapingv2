@@ -18,10 +18,12 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import imp
 
 #USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1'
-save_path = '/home/a_nishikawa/scrapingv2/data/top100/'
-mecab_save_path = '/home/a_nishikawa/scrapingv2/data/learn_data/'
-top10save_path = '/home/a_nishikawa/scrapingv2/data/'
-def scraping(domain):
+
+HOME = '/home/a_nishikawa'
+save_path = HOME + '/scrapingv2/data/top100/'
+mecab_save_path = HOME + '/scrapingv2/data/learn_data/'
+top10save_path = HOME + '/scrapingv2/data/'
+def scrape(domain):
     # requestsの場合
     #headers={'User-Agent':USER_AGENT}
     #HTML = requests.get(url, headers=headers)
@@ -39,18 +41,15 @@ def scraping(domain):
     url_soup = lxml.html.fromstring(HTML.content)
     lim = url_soup.body
     text = lim.xpath('//text()[name(..)!="script"][name(..)!="style"]')
-    text = np.array(text)
-    text = [e for e in text if not e.startswith('\n')]
-    text = [e for e in text if not e.startswith('\t')]
-    text = [e for e in text if not e.startswith('\r')]
-
+    for count, each_text in enumerate(text):
+        text[count] = each_text.replace('\n','')
     return text
 
-def format_text(texts):
+
+def shape_format(texts):
     '''
     MeCabに入れる前のツイートの整形方法例
     '''
-
     texts=re.sub(r'https?://[\w/:%#\$&\?\(\)~\.=\+\-…]+', "", texts)
     texts=re.sub(r'[!-/:-@[-`{-~]', "", texts)#半角記号,数字,英字
     texts=re.sub(r'[︰-＠]', "", texts)#全角記号
@@ -60,38 +59,35 @@ def format_text(texts):
     return texts
 
 
-
-def mecab(sentence):
+def extract_keyword(sentence):
+    """
+    mecabでトークン分割
+    """
     word = []
-
     t = MeCab.Tagger()
     for each_sentence in sentence:
-        each_sentence = format_text(each_sentence)
+        each_sentence = shape_format(each_sentence)
         t.parse('')
-        m = t.parseToNode(each_sentence)
-        #print(m)
-
-
-        while m:
-            if m.feature.split(',')[0] == '名詞' or m.feature.split(',')[0] == '形容詞' or m.feature.split(',')[0] == '動詞' or m.feature.split(',')[0] == '形容動詞語幹':
-                word.append(m.surface)
-            m = m.next
+        node = t.parseToNode(each_sentence)
+        pos = node.feature.split(',')[0]
+        while node:
+            if pos == '名詞' or pos == '形容詞' or pos == '動詞' or pos == '形容動詞語幹':
+                word.append(node.surface)
+            node = node.next
     return word
 
 
-
-df = pd.read_excel('20190110.xlsx', skiprows=0, header=0, index_col=2)
-#print(df)
-
-data = np.array(df)
-#print(data)
-count = 0
-#ドメイン抽出
-domain_list = []
-for i in data:
-    domain_list.append(i[1])
-
-#domain_list = domain_list[0:10]
+def main():
+    df = pd.read_excel('20190110.xlsx', skiprows=0, header=0, index_col=2)
+    data = np.array(df)
+    count = 0
+    #ドメイン抽出
+    domain_list = []
+    for i in data:
+        domain_list.append(i[1])
+    domain_list = domain_list[0:10]
+    #print('domain',domain_list)
+    domain_list.append('blog.livedoor.jp/kinisoku/archives/5013621.html')
 
 word_list = []
 true_list = []
@@ -100,8 +96,8 @@ for counts, j in enumerate(domain_list):
     list = []
     print(j)
     try:
-        text = scraping(j)
-        word = mecab(text)
+        text = scrape(j)
+        word = extract_keyword(text)
         true_list.append(j)
         np.savetxt(mecab_save_path + str(counts) + '.txt', word,fmt='%s', delimiter=',')
         #print('word',word)
@@ -207,7 +203,7 @@ for i,fwords in enumerate(feature_words[:m,:n]):
 tfcolumn_name = ['site_name']
 for i in range(1,11):
     tfcolumn_name.append('top' + str(i))
-print(tfidf_data)
+#print(tfidf_data)
 tf_df =pd.DataFrame(data = tfidf_data, columns = tfcolumn_name)
 
 tf_df.to_csv(top10save_path + 'tf_idf_top10.csv')
